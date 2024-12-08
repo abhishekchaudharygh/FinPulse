@@ -7,3 +7,6 @@ pydantic~=2.10.3
 python-dotenv~=1.0.1
 ipdb~=0.13.13
 passlib~=1.7.4
+PyJWT~=2.10.1
+app~=0.0.1
+replit~=4.1.0
