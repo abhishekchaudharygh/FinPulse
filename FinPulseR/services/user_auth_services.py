@@ -12,7 +12,7 @@ def create_new_expense():
 
 
 @enforce_token_authentication
-async def get_users(request: Request, db: Session = Depends(get_db)):
+async def get_users(request: Request, db: Session = Depends(get_db), email: str = None):
     expenses = db.query(User).all()
     return expenses
 

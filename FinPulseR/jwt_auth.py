@@ -59,9 +59,9 @@ def enforce_token_authentication(func: Callable):
 
         # Extract and validate the JWT token.
         token = auth_header.split(" ")[1]
-        # kwargs["email"] = email   # Incase want user email
         email = decode_and_validate_token(token)
-        request.state.email = email  # Attach email to the request state
+        kwargs["email"] = email   # Incase want user email
+        # request.state.email = email  # Attach email to the request state
         return await func(*args, **kwargs)
 
     return wrapped_function
