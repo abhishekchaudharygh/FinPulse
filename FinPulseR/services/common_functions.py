@@ -25,7 +25,7 @@ def verify_category(user_id: int, data: dict, db):
             budget_obj.monthly_limit = data.get("monthly_limit")
             db.add(budget_obj)
 
-            return{"success": True, "message": "Category created successfully"}
+            return {"success": True, "message": "Category created successfully"}
 
         else:
             return {"success": False, "message": "Please provide monthly limit for new category"}
