@@ -1,3 +1,7 @@
+from datetime import datetime
+
+from sqlalchemy.orm import aliased
+
 from FinPulseR.models import User, Category, Budget, Expense
 from sqlalchemy import func
 
@@ -49,3 +53,32 @@ def verify_monthly_limit(user_id, data: dict, db):
         return {"limit_reached": False,
                 "message": f"Currently you can spend {budget_for_category - total_amount} in {data.get('category')}"
 }
+
+
+def get_month_data(user_id: int, db):
+    current_date = datetime.now().date()
+    first_date = datetime(current_date.year, current_date.month, 1).date()
+
+    CategoryAlias = aliased(Category)
+    BudgetAlias = aliased(Budget)
+
+    expenses_in_month = (
+        db.query(
+            Expense.category.label('expense_category_name'),
+            func.sum(Expense.amount).label('total_expense'),
+            BudgetAlias.monthly_limit.label('budget_limit')
+        )
+        .join(CategoryAlias, Expense.category == CategoryAlias.name)
+        .join(BudgetAlias, CategoryAlias.id == BudgetAlias.category)
+        .filter(
+            Expense.user_id == user_id,
+            Expense.date >= first_date,
+            Expense.date <= current_date,
+            CategoryAlias.user_id == user_id,
+            BudgetAlias.user_id == user_id
+        )
+        .group_by(Expense.category, CategoryAlias.id, BudgetAlias.monthly_limit)
+        .all()
+    )
+
+    return expenses_in_month
