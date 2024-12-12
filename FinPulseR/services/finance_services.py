@@ -6,7 +6,11 @@ from FinPulseR.database import get_db
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 from FinPulseR.services.common_functions import get_current_user, verify_category, verify_monthly_limit, get_month_data
-from FinPulseR.services.email_service import EmailBody, send_email
+from FinPulseR.services.email_service import EmailSender
+from dotenv import load_dotenv
+import os
+load_dotenv()
+
 
 def create_new_expense():
     return {"data": True}
@@ -29,12 +33,9 @@ async def add_expense(request: Request, db: Session = Depends(get_db), data: dic
     db.add(new_expense_obj)
     db.commit()
     is_limit_reached = verify_monthly_limit(user_id=user_id, data=data, db=db)
-    email_body = EmailBody(
-        to=email,
-        subject="Alert from FinPulse",
-        message=is_limit_reached.get("message")
-    )
-    await send_email(email_body)
+    if is_limit_reached.get("limit_reached"):
+        email_sender = EmailSender(os.getenv('MY_EMAIL'), os.getenv('EMAIL_PASSWORD'))
+        email_sender.send_email(email, "Alert from FinPulse", is_limit_reached.get("message"))
 
     return {"success": True, "message": f"Amount {data.get('amount')} is added to category {data.get('category')}",
             "monthly_limit_status": is_limit_reached.get("message")}
