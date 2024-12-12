@@ -1,11 +1,11 @@
 import datetime
 
 from FinPulseR.jwt_auth import enforce_token_authentication
-from FinPulseR.models import Expense, Category
+from FinPulseR.models import Expense
 from FinPulseR.database import get_db
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
-from FinPulseR.services.common_functions import get_current_user, verify_category, verify_monthly_limit, get_month_data
+from FinPulseR.services.common_functions import get_current_user, verify_category, verify_monthly_limit, get_expenses
 from FinPulseR.services.email_service import EmailSender
 from dotenv import load_dotenv
 import os
@@ -44,9 +44,10 @@ async def add_expense(request: Request, db: Session = Depends(get_db), data: dic
 @enforce_token_authentication
 async def get_expense(request: Request, db: Session = Depends(get_db), email: str = None):
     user_id = get_current_user(email, db)
-    monthly_data = get_month_data(user_id=user_id, db=db)
+    this_month_data = get_expenses(user_id=user_id, db=db)
+    print(this_month_data)
     formatted_data = [
-        {"category": category, "spent": spent, "budget": budget}
-        for category, spent, budget in monthly_data
+        {"id": id, "amount": amount, "category": category, "date": date, "description": description}
+        for id, amount, category, date, description in this_month_data
     ]
     return {"success": True, "data": formatted_data}

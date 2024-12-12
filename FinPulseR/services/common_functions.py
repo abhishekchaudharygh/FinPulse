@@ -55,7 +55,22 @@ def verify_monthly_limit(user_id, data: dict, db):
 }
 
 
-def get_month_data(user_id: int, db):
+def get_expenses(user_id: int, db):
+    current_date = datetime.now().date()
+    first_date = datetime(current_date.year, current_date.month, 1).date()
+    expense_obj = db.query(
+        Expense.id.label('id'),
+        Expense.amount.label('amount'),
+        Expense.category.label('category'),
+        Expense.date.label('date'),
+        Expense.description.label('description')
+    ).filter(Expense.user_id == user_id, Expense.date >= first_date,
+                                                                Expense.date <= current_date).all()
+
+    return expense_obj
+
+
+def get_monthly_report_data(user_id: int, db):
     current_date = datetime.now().date()
     first_date = datetime(current_date.year, current_date.month, 1).date()
 
