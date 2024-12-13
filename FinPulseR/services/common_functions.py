@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy.orm import aliased
 
@@ -97,3 +97,27 @@ def get_monthly_report_data(user_id: int, db):
     )
 
     return expenses_in_month
+
+
+def get_expense_summary(db, user_id):
+    # Define the current date, first day of this month, and 10 months ago
+    current_date = datetime.now().date()
+    first_date_this_month = datetime(current_date.year, current_date.month, 1).date()
+    first_date_10_months_ago = (first_date_this_month - timedelta(days=10 * 30)).replace(day=1)
+
+    result = (
+        db.query(
+            func.sum(Expense.amount).filter(Expense.date >= first_date_this_month).label('total_expense_this_month'),
+            func.avg(Expense.amount).filter(
+                Expense.date >= first_date_10_months_ago,
+                Expense.date < first_date_this_month
+            ).label('average_expense_last_10_months')
+        )
+        .filter(Expense.user_id == user_id)
+        .one()
+    )
+    total_expense_this_month = result.total_expense_this_month or 0.0
+    average_expense_last_10_months = result.average_expense_last_10_months or 0.0
+
+    return total_expense_this_month, average_expense_last_10_months
+
