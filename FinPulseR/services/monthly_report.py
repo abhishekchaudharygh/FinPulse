@@ -1,10 +1,16 @@
+import os
+
 from FinPulseR.jwt_auth import enforce_token_authentication
 from FinPulseR.database import get_db
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
+from random import random
+from dotenv import load_dotenv
+from FinPulseR.services.aws_service import S3Uploader
 from FinPulseR.services.common_functions import get_current_user, get_monthly_report_data, get_expense_summary
 from FinPulseR.services.report_generator import ReportGenerator
 
+load_dotenv()
 
 @enforce_token_authentication
 async def get_monthly_report(request: Request, db: Session = Depends(get_db), email: str = None):
@@ -24,15 +30,23 @@ async def get_monthly_report(request: Request, db: Session = Depends(get_db), em
                                            f"This Month\'s Expenses vs Average Monthly Expenses")
 
     # Generate PDF
-    generator.generate_pdf(
+    file_buffer = generator.generate_pdf(
         "report.pdf",
         "FINPULSE EXPENSE REPORT",
-        "Below are some details of your this month's Expenses.",
         [
             ("Money Spent vs Budget by Category", graph1),
             ("This Month\'s Expenses vs Average Monthly Expenses", graph2)
         ],
-        "This is automated report generate by FinPulse"
+        "Below are some details of your this month's Expenses."
     )
 
-    return {"success": True, "data": "formatted_data"}
+    s3_uploader = S3Uploader(
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_REGION"),
+        bucket_name=os.getenv("AWS_BUCKET")
+    )
+    file_name = f"{email.split('@')[0]}_{int(random()*1000000)}.pdf"
+    data = s3_uploader.upload_bytesio(file_buffer, file_name, "finpulse/userdata/")
+
+    return {"success": True, "data": data}
