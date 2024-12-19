@@ -1,6 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
 
 
 class EmailSender:
@@ -8,7 +9,7 @@ class EmailSender:
         self.sender_email = sender_email
         self.sender_password = sender_password
 
-    def send_email(self, recipient_email, subject, message_body):
+    def send_email(self, recipient_email, subject, message_body, is_html=False, inline_images=None):
         try:
             # Create the email message
             msg = MIMEMultipart()
@@ -17,7 +18,15 @@ class EmailSender:
             msg['Subject'] = subject
 
             # Attach the message body
-            msg.attach(MIMEText(message_body, 'plain'))
+            body_type = 'html' if is_html else 'plain'
+            msg.attach(MIMEText(message_body, body_type))
+
+            # Attach inline images if provided
+            if inline_images:
+                for cid, image_data in inline_images.items():
+                    image = MIMEImage(image_data, name=f"{cid}.png")
+                    image.add_header('Content-ID', f"<{cid}>")
+                    msg.attach(image)
 
             # Connect to the SMTP server
             with smtplib.SMTP('smtp.gmail.com', 587) as server:

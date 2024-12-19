@@ -8,6 +8,8 @@ from jinja2 import Template
 import os
 from dotenv import load_dotenv
 
+from FinPulseR.services.email_service import EmailSender
+
 load_dotenv()
 
 
@@ -17,6 +19,8 @@ class ExpenseAnalyzer:
 
     @staticmethod
     def create_visualizations(expenses_df):
+        images = {}
+
         # Spending by category
         plt.figure(figsize=(8, 6))
         sns.barplot(x='category', y='amount', data=expenses_df, errorbar=None)
@@ -27,7 +31,7 @@ class ExpenseAnalyzer:
         plt.savefig(buf, format="png")
         plt.close()
         buf.seek(0)
-        category_image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        images['category_image'] = buf.read()
         buf.close()
 
         # Spending pattern throughout the month
@@ -41,7 +45,7 @@ class ExpenseAnalyzer:
         plt.savefig(buf, format="png")
         plt.close()
         buf.seek(0)
-        pattern_image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        images['pattern_image'] = buf.read()
         buf.close()
 
         # Current month vs average of last 5 months
@@ -59,10 +63,10 @@ class ExpenseAnalyzer:
         plt.savefig(buf, format="png")
         plt.close()
         buf.seek(0)
-        comparison_image_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        images['comparison_image'] = buf.read()
         buf.close()
 
-        return category_image_base64, pattern_image_base64, comparison_image_base64
+        return images
 
     @staticmethod
     async def query_gpt(prompt):
@@ -80,7 +84,7 @@ class ExpenseAnalyzer:
             return f"Error: {str(e)}"
 
     @staticmethod
-    def create_email_content(analysis_table, category_image_base64, pattern_image_base64, comparison_image_base64):
+    def create_email_content(analysis_table):
         email_template = """
         <html>
             <head>
@@ -91,6 +95,12 @@ class ExpenseAnalyzer:
                         padding: 0;
                         background-color: #f9f9f9;
                         color: #333;
+                    }
+                    hr {
+                      margin: 2em auto;
+                      height: 1px;
+                      background-color: grey;
+                      border: none;
                     }
                     h2, h3 {
                         text-align: center;
@@ -129,25 +139,20 @@ class ExpenseAnalyzer:
             <body>
                 <div class="container">
                     <h2>Monthly Expense Analysis</h2>
-                    <h3>Spending Insights</h3>
+                    <hr>
                     {{ analysis_table }}
-                    <h3>Spending by Category</h3>
-                    <img src="data:image/png;base64,{{ category_image_base64 }}" alt="Spending by Category">
-                    <h3>Spending Pattern Throughout the Month</h3>
-                    <img src="data:image/png;base64,{{ pattern_image_base64 }}" alt="Spending Pattern Throughout the Month">
-                    <h3>Current Month Spending vs Last 5 Months Average</h3>
-                    <img src="data:image/png;base64,{{ comparison_image_base64 }}" alt="Spending Comparison">
+                    <br><br>
+                    <img src="cid:category_image" alt="Spending by Category">
+                    <hr>
+                    <img src="cid:pattern_image" alt="Spending Pattern Throughout the Month">
+                    <hr>
+                    <img src="cid:comparison_image" alt="Spending Comparison">
                 </div>
             </body>
         </html>
         """
         template = Template(email_template)
-        return template.render(
-            analysis_table=analysis_table,
-            category_image_base64=category_image_base64,
-            pattern_image_base64=pattern_image_base64,
-            comparison_image_base64=comparison_image_base64
-        )
+        return template.render(analysis_table=analysis_table)
 
     async def analyze_expenses(self, data):
         # Convert expenses to a DataFrame
@@ -156,7 +161,7 @@ class ExpenseAnalyzer:
         expenses_df['month'] = expenses_df['date'].dt.to_period('M')
 
         # Create visualizations
-        category_image_base64, pattern_image_base64, comparison_image_base64 = self.create_visualizations(expenses_df)
+        images = self.create_visualizations(expenses_df)
 
         # Generate insights using GPT
         prompt = f"""
@@ -164,7 +169,8 @@ class ExpenseAnalyzer:
         and compare the current month's total spending to the average of the last five months.
         Compare spending by category to category limits {data['category_monthly_limits']}.
         Provide insights in the following HTML table format, 
-        Also analyse the data and provide insights to the me about my expenses styles and how can I improve provide this insights in html bullets points.
+        Add gap of 2 <br>
+        and analyse the data and provide insights to the me about my expenses styles and how can I improve provide this insights in html bullets points.
 
         <table>
             <thead>
@@ -183,13 +189,13 @@ class ExpenseAnalyzer:
         Always return a valid HTML table.
         """
         analysis_table = await self.query_gpt(prompt)
-        print(analysis_table)
+        analysis_table = analysis_table.strip("```html\n").strip("```")
 
         # Create email content
-        email_html = self.create_email_content(
-            analysis_table, category_image_base64, pattern_image_base64, comparison_image_base64
-        )
-        return email_html
+        email_html = self.create_email_content(analysis_table)
+
+        # Return email content and images
+        return email_html, images
 
 
 # Example Usage
@@ -297,10 +303,16 @@ if __name__ == "__main__":
     # Run analysis
     async def main():
         analyzer = ExpenseAnalyzer(api_key=os.getenv("OPENAI_API_KEY"))
-        email_content = await analyzer.analyze_expenses(data)
+        email_content, images = await analyzer.analyze_expenses(data)
 
-        filename = 'email.html'
-        with open(filename, 'w') as file:
-            file.write(email_content)
+        email_sender = EmailSender(os.getenv('MY_EMAIL'), os.getenv('EMAIL_PASSWORD'))
+        email_sender.send_email(
+            "abc@gmail.com",
+            "Alert from Expense Meter",
+            email_content,
+            is_html=True,
+            inline_images=images
+        )
+
 
     asyncio.run(main())
